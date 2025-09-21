@@ -1,0 +1,39 @@
+{
+  "name": "generative-art-suite",
+  "version": "1.0.0",
+  "description": "A suite of generative art tools with canvas-based generators",
+  "main": "src/main.js",
+  "type": "module",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "dev": "python -m http.server 8000",
+    "serve": "python -m http.server 8000"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.0",
+    "@babel/preset-env": "^7.23.0",
+    "babel-jest": "^29.7.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "setupFilesAfterEnv": ["<rootDir>/tests/setup.js"],
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/src/$1"
+    },
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/main.js"
+    ],
+    "coverageReporters": ["text", "lcov", "html"],
+    "transform": {
+      "^.+\\.js$": "babel-jest"
+    }
+  },
+  "keywords": ["generative-art", "canvas", "javascript", "art-tools"],
+  "author": "Your Name",
+  "license": "MIT"
+}
