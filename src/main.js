@@ -7,7 +7,7 @@ class AppManager {
             'Abstract Film': './generators/abstract-film-generator.js',
             'Wireframe Generator': './generators/grid-tool-generator.js',
             'Image Manipulator': './generators/image-manip-generator.js',
-            'Advanced Logo': './generators/advanced-logo-generator.js',
+            'Advanced Logo Designer': './generators/advanced-logo-generator.js',
             'Vera Molnar': './generators/vera-molnar-generator.js',
             '3D Generator': './generators/3d-generator.js',
         };
