@@ -51,6 +51,8 @@ export default class GridGenerator extends BaseGenerator {
       isSoundEnabled: false,
       soundVolume: 0.05,
       soundWaveform: 'sine',
+      pageSize: 'Poster (A2)', // Add pageSize setting for preset select
+      animationDuration: 3000, // Add animation duration setting
     };
 
     this.canvas = null;
@@ -188,7 +190,17 @@ export default class GridGenerator extends BaseGenerator {
     actionsControls.appendChild(randomizeButton);
     controlsContainer.appendChild(actionsControls);
 
+    // Create preset select for download controls
+    const presetSelectContainer = this._createPresetSelect();
+    this.presetSelectElement = presetSelectContainer.querySelector('select');
+
     this.appendDownloadControls(controlsContainer);
+    
+    // Append the preset select to the download controls
+    const downloadContainer = controlsContainer.querySelector('.control-group');
+    if (downloadContainer) {
+      downloadContainer.appendChild(presetSelectContainer);
+    }
     this.uiContainer.appendChild(controlsContainer);
   }
 

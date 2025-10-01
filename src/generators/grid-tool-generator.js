@@ -178,8 +178,8 @@ export default class GridToolGenerator extends BaseGenerator {
         select.addEventListener('input', (e) => {
             const selectedPresetName = e.target.value;
             this.previewPreset = this._findPreset(selectedPresetName);
-            if (this.onPresetChange) {
-                this.onPresetChange(selectedPresetName, this.previewPreset);
+            if (this.onSettingChange) {
+                this.onSettingChange('pageSize', selectedPresetName);
             }
             this.draw();
         });

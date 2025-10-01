@@ -225,7 +225,12 @@ export default class LayoutDrawer {
         const placeholders = splitPlaceholders(contentRect, numMediaBoxes, numTextBoxes);
 
         placeholders.forEach(p => {
-            const innerRect = { x: p.rect.x + padding, y: p.rect.y + padding, w: p.rect.w - p.rect.w < padding * 2 ? 0 : p.rect.w - padding * 2, h: p.rect.h - p.rect.h < padding * 2 ? 0 : p.rect.h - padding * 2 };
+            const innerRect = { 
+                x: p.rect.x + padding, 
+                y: p.rect.y + padding, 
+                w: p.rect.w < padding * 2 ? 0 : p.rect.w - padding * 2,
+                h: p.rect.h < padding * 2 ? 0 : p.rect.h - padding * 2
+            };
             if (p.type === 'media') {
                 this._drawMediaOrPlaceholder(innerRect, mediaBoxColor, mediaStore);
             } else { // 'text'

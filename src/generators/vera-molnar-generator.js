@@ -94,6 +94,17 @@ export default class VeraMolnarGenerator extends BaseGenerator {
         animControls.appendChild(this._createCheckbox('isGameOfLife', 'Game of Life'));
         animControls.appendChild(this._createSlider('simulationSpeed', 'Simulation Speed', { min: 0.1, max: 10, step: 0.1 }));
         animControls.appendChild(this._createSelect('gameOfLifeSeed', 'GoL Seed', ['random', 'glider', 'pulsar']));
+        
+        const resetButton = document.createElement('button');
+        resetButton.innerText = 'Reset Simulation';
+        resetButton.addEventListener('click', () => this._initializeLifeGrid());
+        animControls.appendChild(resetButton);
+
+        const stepButton = document.createElement('button');
+        stepButton.innerText = 'Step Simulation';
+        stepButton.addEventListener('click', () => this._stepSimulation());
+        animControls.appendChild(stepButton);
+
         controlsContainer.appendChild(animControls);
 
         const actionsControls = this._createfieldset('Actions');
@@ -118,6 +129,11 @@ export default class VeraMolnarGenerator extends BaseGenerator {
         if ((key === 'isGameOfLife' && value) || (key === 'gameOfLifeSeed' && this.settings.isGameOfLife)) {
             this._initializeLifeGrid();
         }
+    }
+
+    _stepSimulation() {
+        this._updateLifeGrid();
+        this.draw(performance.now());
     }
 
     _handleAnimationToggle(isChecked) {
@@ -314,7 +330,7 @@ export default class VeraMolnarGenerator extends BaseGenerator {
                 }
 
                 const state = this.lifeGrid[i]?.[j];
-                if (state === undefined) continue; // Skip if the cell is out of bounds
+                if (state === undefined) continue;
 
                 if (state === 1 && (liveNeighbors < 2 || liveNeighbors > 3)) newGrid[i][j] = 0;
                 else if (state === 0 && liveNeighbors === 3) newGrid[i][j] = 1;

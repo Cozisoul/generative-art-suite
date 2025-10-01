@@ -288,7 +288,7 @@ export default class BaseGenerator {
     }
 
         _showPreview() {
-        const presetName = this.presetSelectElement.value;
+        if (!this._ensurePresetSelect()) return; const presetName = this.presetSelectElement.value;
         if (!presetName) return;
 
         const preset = this._findPreset(presetName);
@@ -347,51 +347,204 @@ export default class BaseGenerator {
         return `artwork-${sanitized}.png`;
     }
 
-        downloadArtwork(preset, presetName) {
-        if (this.is3D) {
-            // For 3D, we capture directly from the main canvas
-            this.draw(); // Ensure the latest frame is rendered
-            const link = document.createElement('a');
-            link.download = this._getDownloadFilename(presetName);
-            const canvasElement = this.canvasContainer.querySelector('canvas');
-            if (canvasElement) {
-                link.href = canvasElement.toDataURL('image/png');
-                link.click();
-            } else {
-                console.error('Canvas element not found in canvasContainer for 3D download.');
+    /**
+     * Ensures the canvas is fully rendered with all layers before download operations.
+     * This method should be called before any download to guarantee complete rendering.
+     */
+    _ensureCanvasRendered() {
+        // Force a complete redraw of the main canvas
+        this.draw();
+        
+        // If there's an animation loop running, ensure it completes one cycle
+        if (this.animationId) {
+            // Cancel current animation and do one final render
+            cancelAnimationFrame(this.animationId);
+            this.animationId = null;
+        }
+        
+        // Force one more render to ensure everything is up to date
+        this.draw();
+    }
+
+    /**
+     * Public method for handling setting changes.
+     * This method should be called by UI controls when settings change.
+     */
+    onSettingChange(key, value) {
+        try {
+            if (this._handleSettingChange) {
+                this._handleSettingChange(key, value);
             }
-        } else {
-            // For 2D generators, ensure the main canvas is rendered first
+            // Update the setting
+            this.settings[key] = value;
+            // Redraw the canvas
             this.draw();
-            
-            const offscreenCanvas = document.createElement('canvas');
-            offscreenCanvas.width = preset.width;
-            offscreenCanvas.height = preset.height;
-            const offscreenContext = offscreenCanvas.getContext('2d');
-
-            // Render the artwork onto the offscreen canvas.
-            this.renderArtwork(offscreenContext, preset.width, preset.height, this.settings, 0);
-
-            const link = document.createElement('a');
-            link.download = this._getDownloadFilename(presetName);
-            link.href = offscreenCanvas.toDataURL('image/png');
-            link.click();
+        } catch (error) {
+            console.error('Error handling setting change:', error);
         }
     }
+
+    /**
+     * Draw method - should be overridden in subclasses.
+     * This provides a base implementation with error handling.
+     */
+    draw() {
+        try {
+            // Override this method in subclasses to implement drawing logic
+            console.warn('BaseGenerator.draw() called - should be overridden in subclass');
+        } catch (error) {
+            console.error('Error in draw method:', error);
+        }
+    }
+
+    /**
+     * Render artwork method - should be overridden in subclasses.
+     * This is used for high-resolution downloads and animations.
+     */
+    renderArtwork(ctx, width, height, settings, time = 0) {
+        try {
+            // Override this method in subclasses to implement rendering logic
+            console.warn('BaseGenerator.renderArtwork() called - should be overridden in subclass');
+            
+            // Basic fallback: draw a simple rectangle
+            ctx.fillStyle = settings.backgroundColor || '#ffffff';
+            ctx.fillRect(0, 0, width, height);
+            
+            ctx.fillStyle = '#000000';
+            ctx.font = '48px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Override renderArtwork()', width / 2, height / 2);
+        } catch (error) {
+            console.error('Error in renderArtwork method:', error);
+        }
+    }
+
+    /**
+     * Renders the artwork to a high-resolution offscreen canvas and triggers a download.
+     * This is ideal for generating print-quality files with all layers properly captured.
+     */
+    downloadArtwork(preset, presetName) {
+        if (!preset || !preset.width || !preset.height) {
+            console.error('Invalid preset provided for high-resolution download.', preset);
+            alert('Invalid preset selected for download.');
+            return;
+        }
+
+        // Ensure the main canvas is fully rendered with all layers
+        this._ensureCanvasRendered();
+
+        // Create high-resolution offscreen canvas
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = preset.width;
+        offscreenCanvas.height = preset.height;
+        const offscreenContext = offscreenCanvas.getContext('2d', { 
+            willReadFrequently: true,
+            alpha: true 
+        });
+
+        // Set up high-quality rendering
+        offscreenContext.imageSmoothingEnabled = true;
+        offscreenContext.imageSmoothingQuality = 'high';
+
+        // Clear canvas with background color
+        offscreenContext.fillStyle = this.settings.backgroundColor || '#ffffff';
+        offscreenContext.fillRect(0, 0, preset.width, preset.height);
+
+        // Render the artwork with all layers
+        try {
+            this.renderArtwork(offscreenContext, preset.width, preset.height, this.settings, 0);
+        } catch (error) {
+            console.error('Error rendering artwork for download:', error);
+            alert('Error rendering artwork for download. Please try again.');
+            return;
+        }
+
+        // Create download link with high quality
+        const link = document.createElement('a');
+        link.download = this._getDownloadFilename(presetName);
+        link.href = offscreenCanvas.toDataURL('image/png', 1.0); // Maximum quality
+        link.click();
+    }
+
+    /**
+     * Captures the current state of the visible canvas and triggers a download.
+     * This provides a "what you see is what you get" (WYSIWYG) export with all layers.
+     */
+    downloadVisibleCanvas(presetName) {
+        // Ensure the latest frame is rendered with all layers
+        this._ensureCanvasRendered();
+
+        let canvasElement;
+        if (this.is3D) {
+            canvasElement = this.canvasContainer.querySelector('canvas');
+        } else {
+            canvasElement = this.canvas;
+        }
+
+        if (!canvasElement) {
+            console.error('Visible canvas element not found for download.');
+            alert('Could not find the canvas to download.');
+            return;
+        }
+
+        // Verify canvas has content
+        if (canvasElement.width === 0 || canvasElement.height === 0) {
+            console.error('Canvas has zero dimensions.');
+            alert('Canvas is not properly initialized. Please try again.');
+            return;
+        }
+
+        // Create a temporary canvas to ensure we capture everything
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvasElement.width;
+        tempCanvas.height = canvasElement.height;
+        const tempContext = tempCanvas.getContext('2d', { 
+            willReadFrequently: true,
+            alpha: true 
+        });
+
+        // Set up high-quality rendering
+        tempContext.imageSmoothingEnabled = true;
+        tempContext.imageSmoothingQuality = 'high';
+
+        // Copy the entire canvas content
+        tempContext.drawImage(canvasElement, 0, 0);
+
+        // Create download link with high quality
+        const link = document.createElement('a');
+        link.download = this._getDownloadFilename(presetName || 'canvas-capture');
+        link.href = tempCanvas.toDataURL('image/png', 1.0); // Maximum quality
+        link.click();
+    }
+
     async downloadAnimation(preset, presetName, options = {}) {
         const { duration = 3000, frameRate = 30 } = options;
     
-        // Create a visible canvas for video capture
+        if (!preset || !preset.width || !preset.height) {
+            console.error('Invalid preset provided for animation download.', preset);
+            alert('Invalid preset selected for animation download.');
+            return;
+        }
+
+        // Create a high-quality canvas for video capture
         const videoCanvas = document.createElement('canvas');
         videoCanvas.width = preset.width;
         videoCanvas.height = preset.height;
         videoCanvas.style.position = 'fixed';
         videoCanvas.style.top = '-9999px';
         videoCanvas.style.left = '-9999px';
+        videoCanvas.style.zIndex = '-1';
         document.body.appendChild(videoCanvas);
         
-        const videoContext = videoCanvas.getContext('2d');
-    
+        const videoContext = videoCanvas.getContext('2d', { 
+            willReadFrequently: true,
+            alpha: true 
+        });
+
+        // Set up high-quality rendering
+        videoContext.imageSmoothingEnabled = true;
+        videoContext.imageSmoothingQuality = 'high';
+
         // Show a "Recording..." message
         const originalButtonText = {};
         const downloadButtons = this.uiContainer.querySelectorAll('.animation-download-button');
@@ -403,7 +556,10 @@ export default class BaseGenerator {
     
         try {
             const stream = videoCanvas.captureStream(frameRate);
-            const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+            const recorder = new MediaRecorder(stream, { 
+                mimeType: 'video/webm;codecs=vp9',
+                videoBitsPerSecond: 2500000 // High quality
+            });
             const chunks = [];
         
             recorder.ondataavailable = e => e.data.size > 0 && chunks.push(e.data);
@@ -429,7 +585,7 @@ export default class BaseGenerator {
         
             recorder.start();
         
-            let animFrameId;
+            let animFrameId, lastFrameTime = -1;
             const startTime = performance.now();
             const recordLoop = (currentTime) => {
                 const elapsedTime = currentTime - startTime;
@@ -438,13 +594,28 @@ export default class BaseGenerator {
                     cancelAnimationFrame(animFrameId);
                     return;
                 }
-                this.renderArtwork(videoContext, preset.width, preset.height, this.settings, elapsedTime);
+                // Only render if enough time has passed for the next frame
+                if (lastFrameTime === -1 || (currentTime - lastFrameTime) >= (1000 / frameRate)) {
+                    // Clear the canvas for the new frame with background color
+                    videoContext.fillStyle = this.settings.backgroundColor || '#ffffff';
+                    videoContext.fillRect(0, 0, preset.width, preset.height);
+                    
+                    // Render the artwork for the current time with all layers
+                    try {
+                        this.renderArtwork(videoContext, preset.width, preset.height, this.settings, elapsedTime);
+                    } catch (error) {
+                        console.error('Error rendering frame for video:', error);
+                    }
+                    lastFrameTime = currentTime;
+                }
                 animFrameId = requestAnimationFrame(recordLoop);
             };
             animFrameId = requestAnimationFrame(recordLoop);
         } catch (error) {
             console.error('Error creating video:', error);
-            document.body.removeChild(videoCanvas);
+            if (document.body.contains(videoCanvas)) {
+                document.body.removeChild(videoCanvas);
+            }
             downloadButtons.forEach(btn => {
                 btn.innerText = originalButtonText[btn.dataset.format];
                 btn.disabled = false;
@@ -501,41 +672,62 @@ export default class BaseGenerator {
     }
   }
 
+  _ensurePresetSelect() {
+    if (!this.presetSelectElement) {
+        // If no preset select was created by the subclass, create a default one.
+        // This prevents errors and allows download functionality to work out-of-the-box.
+        const defaultPresetSelectContainer = this._createPresetSelect();
+        this.presetSelectElement = defaultPresetSelectContainer.querySelector('select');
+        if (!this.presetSelectElement) {
+            console.error('Failed to create a default preset select element.');
+            return false;
+        }
+        // Append the preset select to the download controls
+        const downloadContainer = this.uiContainer.querySelector('.control-group');
+        if (downloadContainer) {
+            downloadContainer.appendChild(defaultPresetSelectContainer);
+        }
+    }
+    return true;
+  }
+
+  /**
+   * Handles canvas resizing. For 2D generators, this typically involves redrawing.
+   * 3D generators should override this to update camera and renderer.
+   */
+  resizeCanvas() {
+    this.draw();
+  }
+
   appendDownloadControls(container) {
     const downloadContainer = this._createfieldset('Download');
 
-    const downloadButton = document.createElement('button');
-    downloadButton.innerText = 'Download Image';
-    downloadButton.classList.add('action-button');
-    downloadButton.addEventListener('click', () => {
-        // Ensure presetSelectElement exists before accessing its value
-        if (!this.presetSelectElement) {
-            // If no preset select was created by the subclass, create a default one
-            // This might not be ideal for all cases, but prevents the TypeError
-            // and allows basic download functionality.
-            const defaultPresetSelect = this._createPresetSelect();
-            // Append it somewhere, or just use its value for this operation
-            // For now, we'll just ensure it's set to this.presetSelectElement
-            // and assume the subclass will handle appending it if needed.
-            // A more robust solution might involve making _createPresetSelect return the element
-            // and then appending it to the downloadContainer if it's not already part of the UI.
-            // For this fix, we'll just ensure the reference is set.
-            this.presetSelectElement = defaultPresetSelect.querySelector('select');
-            if (!this.presetSelectElement) { // Fallback if _createPresetSelect doesn't return a select
-                console.error('Failed to create a default preset select element.');
-                return;
-            }
-        }
+    const wysiwygButton = document.createElement('button');
+    wysiwygButton.innerText = 'Download Canvas';
+    wysiwygButton.title = 'Download what you see on the screen.';
+    wysiwygButton.classList.add('action-button');
+    wysiwygButton.addEventListener('click', () => {
+        this.downloadVisibleCanvas('canvas-capture');
+    });
+    downloadContainer.appendChild(wysiwygButton);
+
+    const hiresButton = document.createElement('button');
+    hiresButton.innerText = 'Download Hi-Res';
+    hiresButton.title = 'Download a high-resolution version based on the selected page size.';
+    hiresButton.classList.add('action-button');
+    hiresButton.addEventListener('click', () => {
+        if (!this._ensurePresetSelect()) return;
         const selectedPresetName = this.presetSelectElement.value;
         const preset = this._findPreset(selectedPresetName);
         if (preset) {
+            // Use the original high-resolution download method
             this.downloadArtwork(preset, selectedPresetName);
         } else {
             console.error(`Preset "${selectedPresetName}" not found.`);
         }
     });
 
-    downloadContainer.appendChild(downloadButton);
+    downloadContainer.appendChild(hiresButton);
 
     // Add animation duration control
     const animationDurationControl = this._createSlider('animationDuration', 'Animation Duration', { min: 1000, max: 10000, unit: 'ms', step: 500 });
@@ -548,14 +740,7 @@ export default class BaseGenerator {
         videoButton.classList.add('action-button', 'animation-download-button');
         videoButton.dataset.format = 'webm';
         videoButton.addEventListener('click', () => {
-            if (!this.presetSelectElement) {
-                const defaultPresetSelect = this._createPresetSelect();
-                this.presetSelectElement = defaultPresetSelect.querySelector('select');
-                if (!this.presetSelectElement) {
-                    console.error('Failed to create a default preset select element.');
-                    return;
-                }
-            }
+            if (!this._ensurePresetSelect()) return;
             const selectedPresetName = this.presetSelectElement.value;
             const preset = this._findPreset(selectedPresetName);
             if (preset) {
@@ -569,14 +754,7 @@ export default class BaseGenerator {
         gifButton.classList.add('action-button', 'animation-download-button');
         gifButton.dataset.format = 'gif';
         gifButton.addEventListener('click', () => {
-            if (!this.presetSelectElement) {
-                const defaultPresetSelect = this._createPresetSelect();
-                this.presetSelectElement = defaultPresetSelect.querySelector('select');
-                if (!this.presetSelectElement) {
-                    console.error('Failed to create a default preset select element.');
-                    return;
-                }
-            }
+            if (!this._ensurePresetSelect()) return;
             const selectedPresetName = this.presetSelectElement.value;
             const preset = this._findPreset(selectedPresetName);
             if (preset) {
@@ -594,12 +772,33 @@ export default class BaseGenerator {
     const numFrames = (duration / 1000) * frameRate;
     const frameDelay = 1000 / frameRate;
 
+    if (!preset || !preset.width || !preset.height) {
+        console.error('Invalid preset provided for GIF download.', preset);
+        alert('Invalid preset selected for GIF download.');
+        return;
+    }
+
+    // Check if GIF library is available
+    if (typeof GIF === 'undefined') {
+        console.error('GIF.js library not found. Please include it in your HTML.');
+        alert('GIF.js library not found. Cannot generate GIF. Please check console for details.');
+        return;
+    }
+
+    // Create high-quality offscreen canvas for GIF generation
     const offscreenCanvas = document.createElement('canvas');
     offscreenCanvas.width = preset.width;
     offscreenCanvas.height = preset.height;
-    const offscreenContext = offscreenCanvas.getContext('2d', { willReadFrequently: true });
+    const offscreenContext = offscreenCanvas.getContext('2d', { 
+        willReadFrequently: true,
+        alpha: true 
+    });
 
-    // Show a "Recording..." message
+    // Set up high-quality rendering
+    offscreenContext.imageSmoothingEnabled = true;
+    offscreenContext.imageSmoothingQuality = 'high';
+
+    // Show a "Recording..." message and disable buttons
     const originalButtonText = {};
     const downloadButtons = this.uiContainer.querySelectorAll('.animation-download-button');
     downloadButtons.forEach(btn => {
@@ -607,64 +806,89 @@ export default class BaseGenerator {
         btn.innerText = 'Recording GIF...';
         btn.disabled = true;
     });
-
-    // Check if GIF library is available
-    if (typeof GIF === 'undefined') {
-        console.error('GIF.js library not found. Please include it in your HTML.');
+    
+    const restoreButtons = () => {
         downloadButtons.forEach(btn => {
             btn.innerText = originalButtonText[btn.dataset.format];
             btn.disabled = false;
         });
-        alert('GIF.js library not found. Cannot generate GIF. Please check console for details.');
-        return;
-    }
+    };
 
-    const gif = new GIF({
-        workers: 2,
-        quality: 10,
-        width: preset.width,
-        height: preset.height,
-        workerScript: 'assets/gif.worker.js'
-    });
-
-    const canvases = this.canvasContainer.querySelectorAll('canvas');
-
-    for (let i = 0; i < numFrames; i++) {
-        const time = (i / frameRate) * 1000; // Time in milliseconds
-        
-        // Clear the offscreen canvas
-        offscreenContext.fillStyle = this.settings.backgroundColor || '#ffffff';
-        offscreenContext.fillRect(0, 0, preset.width, preset.height);
-        
-        // Render the artwork directly to the offscreen canvas
-        this.renderArtwork(offscreenContext, preset.width, preset.height, this.settings, time);
-
-        gif.addFrame(offscreenCanvas, { delay: frameDelay, copy: true });
-    }
-
-    gif.on('finished', (blob) => {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.download = `${this._getDownloadFilename(presetName)}.gif`;
-        link.href = url;
-        link.click();
-        URL.revokeObjectURL(url);
-
-        // Restore button text
-        downloadButtons.forEach(btn => {
-            btn.innerText = originalButtonText[btn.dataset.format];
-            btn.disabled = false;
+    try {
+        // Create GIF with high quality settings
+        const gif = new GIF({
+            workers: 2,
+            quality: 20, // Higher quality (1-20, where 20 is best)
+            width: preset.width,
+            height: preset.height,
+            workerScript: 'assets/gif.worker.js',
+            dither: 'FloydSteinberg', // Better dithering
+            transparent: null, // No transparency for better compatibility
+            background: this.settings.backgroundColor || '#ffffff'
         });
-    });
 
-    gif.on('progress', (p) => {
-        downloadButtons.forEach(btn => {
-            if (btn.dataset.format === 'gif') {
-                btn.innerText = `Rendering GIF... ${Math.round(p * 100)}%`;
+        // Generate frames with all layers
+        for (let i = 0; i < numFrames; i++) {
+            const time = i * frameDelay; // Time in milliseconds
+            
+            // Clear the offscreen canvas with background color
+            offscreenContext.fillStyle = this.settings.backgroundColor || '#ffffff';
+            offscreenContext.fillRect(0, 0, preset.width, preset.height);
+            
+            // Render the artwork with all layers for this frame
+            try {
+                this.renderArtwork(offscreenContext, preset.width, preset.height, this.settings, time);
+            } catch (error) {
+                console.error(`Error rendering frame ${i} for GIF:`, error);
+                // Continue with next frame
             }
-        });
-    });
 
-    gif.render();
+            // Add frame to GIF
+            gif.addFrame(offscreenCanvas, { 
+                delay: frameDelay, 
+                copy: true 
+            });
+
+            // Update progress
+            const progress = (i + 1) / numFrames;
+            downloadButtons.forEach(btn => {
+                if (btn.dataset.format === 'gif') {
+                    const percentage = Math.round(progress * 100);
+                    btn.innerText = `Rendering... ${percentage}%`;
+                }
+            });
+        }
+
+        // Set up event handlers
+        gif.on('finished', (blob) => {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.download = `${this._getDownloadFilename(presetName)}.gif`;
+            link.href = url;
+            link.click();
+            URL.revokeObjectURL(url);
+            restoreButtons();
+        });
+
+        gif.on('progress', (p) => {
+            downloadButtons.forEach(btn => {
+                if (btn.dataset.format === 'gif') {
+                    const percentage = Math.round(p * 100);
+                    btn.innerText = `Processing... ${percentage}%`;
+                }
+            });
+        });
+
+        gif.on('abort', () => {
+            console.error('GIF rendering was aborted.');
+            restoreButtons();
+        });
+
+        // Start rendering
+        gif.render();
+    } catch (error) {
+        console.error('An error occurred during GIF generation:', error);
+        restoreButtons();
+    }
   }
 }

@@ -32,6 +32,7 @@ export default class ThreeDGenerator extends BaseGenerator {
         this.mesh = null;
         this.animationFrameId = null;
         this.isAnimatable = true; // This generator is animated
+        this.lights = []; // Store lights for proper disposal
 
         this.setup();
     }
@@ -143,9 +144,11 @@ export default class ThreeDGenerator extends BaseGenerator {
                 material = new THREE.MeshPhongMaterial({ color: this.settings.color });
                 const ambientLight = new THREE.AmbientLight(0x404040);
                 this.scene.add(ambientLight);
+                this.lights.push(ambientLight);
                 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
                 directionalLight.position.set(1, 1, 1);
                 this.scene.add(directionalLight);
+                this.lights.push(directionalLight);
                 break;
             case 'Textured':
                 const canvas = document.createElement('canvas');
@@ -167,9 +170,11 @@ export default class ThreeDGenerator extends BaseGenerator {
                 material = new THREE.MeshPhongMaterial({ color: this.settings.color });
                 const ambientLightDefault = new THREE.AmbientLight(0x404040);
                 this.scene.add(ambientLightDefault);
+                this.lights.push(ambientLightDefault);
                 const directionalLightDefault = new THREE.DirectionalLight(0xffffff, 0.5);
                 directionalLightDefault.position.set(1, 1, 1);
                 this.scene.add(directionalLightDefault);
+                this.lights.push(directionalLightDefault);
                 break;
         }
 
@@ -208,23 +213,82 @@ export default class ThreeDGenerator extends BaseGenerator {
         this.renderer.render(this.scene, this.camera);
     }
 
+    resizeCanvas() {
+        if (this.camera && this.renderer) {
+            const width = this.canvasContainer.clientWidth;
+            const height = this.canvasContainer.clientHeight;
+            this.camera.aspect = width / height;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(width, height);
+        }
+    }
+
     downloadArtwork(preset, presetName) {
-        this.renderer.render(this.scene, this.camera);
-        const link = document.createElement('a');
-        link.download = this._getDownloadFilename(presetName);
-        link.href = this.renderer.domElement.toDataURL('image/png');
-        link.click();
+        // For 3D, we need to render at high resolution
+        if (!preset || !preset.width || !preset.height) {
+            console.error('Invalid preset provided for 3D download.', preset);
+            alert('Invalid preset selected for download.');
+            return;
+        }
+
+        // Store original renderer size
+        const originalSize = {
+            width: this.renderer.getSize(new THREE.Vector2()).x,
+            height: this.renderer.getSize(new THREE.Vector2()).y
+        };
+
+        try {
+            // Set renderer to high resolution
+            this.renderer.setSize(preset.width, preset.height);
+            this.camera.aspect = preset.width / preset.height;
+            this.camera.updateProjectionMatrix();
+
+            // Render the scene
+            this.renderer.render(this.scene, this.camera);
+
+            // Capture the canvas
+            const canvas = this.renderer.domElement;
+            const link = document.createElement('a');
+            link.download = this._getDownloadFilename(presetName);
+            link.href = canvas.toDataURL('image/png', 1.0);
+            link.click();
+
+        } catch (error) {
+            console.error('Error rendering 3D artwork for download:', error);
+            alert('Error rendering 3D artwork for download. Please try again.');
+        } finally {
+            // Restore original renderer size
+            this.renderer.setSize(originalSize.width, originalSize.height);
+            this.camera.aspect = originalSize.width / originalSize.height;
+            this.camera.updateProjectionMatrix();
+        }
     }
 
     destroy() {
         super.destroy();
         cancelAnimationFrame(this.animationFrameId);
+        
+        // Dispose of mesh
         if (this.mesh) {
             this.scene.remove(this.mesh);
             this.mesh.geometry.dispose();
             this.mesh.material.dispose();
         }
-        this.renderer.dispose();
+        
+        // Dispose of lights
+        this.lights.forEach(light => {
+            this.scene.remove(light);
+            if (light.dispose) {
+                light.dispose();
+            }
+        });
+        this.lights = [];
+        
+        // Dispose of renderer
+        if (this.renderer) {
+            this.renderer.dispose();
+        }
+        
         this.canvasContainer.innerHTML = '';
     }
 }

@@ -121,6 +121,7 @@ export default class AdvancedLogoGenerator extends BaseGenerator {
             textOpacity: 1.0,
         };
 
+        this.previewPreset = this.presets['Square Logo'];
         this.colorSchemes = {
             'monochrome': ['#000000', '#333333', '#666666', '#999999', '#CCCCCC', '#FFFFFF'],
             'blue': ['#001F3F', '#0074D9', '#7FDBFF', '#39CCCC', '#3D9970', '#2ECC40'],
@@ -648,7 +649,8 @@ export default class AdvancedLogoGenerator extends BaseGenerator {
 
     // Override the setting change handler to apply presets
     _handleSettingChange(key, value) {
-        super._handleSettingChange(key, value);
+        // Update the setting
+        this.settings[key] = value;
 
         if (key === 'logoStyle') {
             this._applyStylePreset(value);

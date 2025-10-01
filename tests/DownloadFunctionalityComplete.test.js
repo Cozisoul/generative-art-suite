@@ -1,4 +1,14 @@
 import BaseGenerator from '../src/BaseGenerator.js';
+import GridGenerator from '../src/generators/sketch-01.js';
+import SwissGenerator from '../src/generators/swiss-generator.js';
+import BauhausGenerator from '../src/generators/bauhaus-generator.js';
+import AbstractFilmGenerator from '../src/generators/abstract-film-generator.js';
+import GridToolGenerator from '../src/generators/grid-tool-generator.js';
+import ImageManipGenerator from '../src/generators/image-manip-generator.js';
+import LogoGenerator from '../src/generators/logo-generator.js';
+import VeraMolnarGenerator from '../src/generators/vera-molnar-generator.js';
+import ThreeDGenerator from '../src/generators/3d-generator.js';
+
 
 // Mock generator class for testing all download functionality
 class MockGenerator extends BaseGenerator {
@@ -71,15 +81,17 @@ describe('Complete Download Functionality Test', () => {
       generator.setup();
       generator.createControls();
       
+    // Mock the renderArtwork method
+      const renderSpy = jest.spyOn(generator, 'renderArtwork');
+      // Verify draw was called to ensure main canvas is rendered
+      const drawSpy = jest.spyOn(generator, 'draw');
+      
       const mockPreset = { width: 800, height: 600 };
       const mockPresetName = 'Test Canvas Capture';
-      
-      // Mock the renderArtwork method
-      const renderSpy = jest.spyOn(generator, 'renderArtwork');
-      
       generator.downloadArtwork(mockPreset, mockPresetName);
       
-      // Verify renderArtwork was called
+      // Verify both draw and renderArtwork were called
+      expect(drawSpy).toHaveBeenCalled();
       expect(renderSpy).toHaveBeenCalledWith(
         expect.any(Object), // context
         800, // width
@@ -87,11 +99,6 @@ describe('Complete Download Functionality Test', () => {
         generator.settings, // settings
         0 // frame
       );
-      
-      // Verify draw was called to ensure main canvas is rendered
-      const drawSpy = jest.spyOn(generator, 'draw');
-      generator.downloadArtwork(mockPreset, mockPresetName);
-      expect(drawSpy).toHaveBeenCalled();
     });
 
     test('should handle 3D canvas capture', () => {
@@ -325,6 +332,49 @@ describe('Complete Download Functionality Test', () => {
       
       // Download should complete within 100ms (very generous for mocked operations)
       expect(endTime - startTime).toBeLessThan(100);
+    });
+  });
+
+  describe('Generator-Specific Download Tests', () => {
+    const generators = [
+      { name: 'GridGenerator', class: GridGenerator },
+      { name: 'SwissGenerator', class: SwissGenerator },
+      { name: 'BauhausGenerator', class: BauhausGenerator },
+      { name: 'AbstractFilmGenerator', class: AbstractFilmGenerator },
+      { name: 'GridToolGenerator', class: GridToolGenerator },
+      { name: 'ImageManipGenerator', class: ImageManipGenerator },
+      { name: 'LogoGenerator', class: LogoGenerator },
+      { name: 'VeraMolnarGenerator', class: VeraMolnarGenerator },
+      { name: 'ThreeDGenerator', class: ThreeDGenerator }
+    ];
+
+    generators.forEach(({ name, class: GeneratorClass }) => {
+      describe(`${name}`, () => {
+        let generator;
+
+        beforeEach(() => {
+          generator = new GeneratorClass(canvasContainer, uiContainer);
+        });
+
+        test('should instantiate without errors', () => {
+          expect(generator).toBeInstanceOf(GeneratorClass);
+        });
+
+        test('should call downloadArtwork without throwing an error', () => {
+          const mockPreset = { width: 100, height: 100 };
+          const mockPresetName = 'Test Download';
+
+          // Mock rendering/drawing methods to isolate download logic
+          if (typeof generator.renderArtwork === 'function') {
+            jest.spyOn(generator, 'renderArtwork').mockImplementation(() => {});
+          }
+          if (typeof generator.draw === 'function') {
+            jest.spyOn(generator, 'draw').mockImplementation(() => {});
+          }
+
+          expect(() => generator.downloadArtwork(mockPreset, mockPresetName)).not.toThrow();
+        });
+      });
     });
   });
 });

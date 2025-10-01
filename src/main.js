@@ -12,12 +12,27 @@ class AppManager {
             '3D Generator': './generators/3d-generator.js',
         };
         this.activeGenerator = null;
+        
+        // Check for required DOM elements
         this.uiContainer = document.getElementById('ui-container');
         this.canvasContainer = document.getElementById('canvas-wrapper');
         this.generatorList = document.getElementById('generator-list');
         this.libraryColumn = document.getElementById('library-column');
         this.toggleLibraryBtn = document.getElementById('toggle-library-btn');
         this.workspaceContainer = document.querySelector('.workspace-container');
+
+        if (!this.uiContainer) {
+            console.error('UI container not found');
+            return;
+        }
+        if (!this.canvasContainer) {
+            console.error('Canvas container not found');
+            return;
+        }
+        if (!this.generatorList) {
+            console.error('Generator list not found');
+            return;
+        }
 
         this.createSwitcher();
         this.loadGenerator(Object.keys(this.generators)[0]);
@@ -73,27 +88,50 @@ class AppManager {
     }
 
     async loadGenerator(name) {
-        if (this.activeGenerator && typeof this.activeGenerator.destroy === 'function') {
-            this.activeGenerator.destroy();
-        }
-        this.canvasContainer.innerHTML = '';
-        
-        const controls = this.uiContainer.querySelector('.controls');
-        if (controls) controls.remove();
-
-        const scriptPath = this.generators[name];
-        const module = await import(scriptPath);
-        const GeneratorClass = module.default;
-        this.activeGenerator = new GeneratorClass(this.canvasContainer, this.uiContainer);
-
-        // Set active class for the first loaded generator
-        if (!this.generatorList.querySelector('.tutorial-item.active')) {
-            const firstItem = this.generatorList.querySelector(`[data-generator-name="${name}"]`);
-            if (firstItem) {
-                firstItem.classList.add('active');
+        try {
+            if (this.activeGenerator && typeof this.activeGenerator.destroy === 'function') {
+                this.activeGenerator.destroy();
             }
+            this.canvasContainer.innerHTML = '';
+            
+            const controls = this.uiContainer.querySelector('.controls');
+            if (controls) controls.remove();
+
+            const scriptPath = this.generators[name];
+            if (!scriptPath) {
+                throw new Error(`Generator "${name}" not found in generators list`);
+            }
+
+            const module = await import(scriptPath);
+            const GeneratorClass = module.default;
+            
+            if (!GeneratorClass) {
+                throw new Error(`Generator class not found in module: ${scriptPath}`);
+            }
+
+            this.activeGenerator = new GeneratorClass(this.canvasContainer, this.uiContainer);
+
+            // Set active class for the first loaded generator
+            if (!this.generatorList.querySelector('.tutorial-item.active')) {
+                const firstItem = this.generatorList.querySelector(`[data-generator-name="${name}"]`);
+                if (firstItem) {
+                    firstItem.classList.add('active');
+                }
+            }
+        } catch (error) {
+            console.error(`Failed to load generator ${name}:`, error);
+            // Show user-friendly error message
+            this.canvasContainer.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #ff6b6b; font-family: sans-serif;">
+                    <div style="text-align: center;">
+                        <h3>Failed to load generator</h3>
+                        <p>Error: ${error.message}</p>
+                        <p>Please try refreshing the page or selecting a different generator.</p>
+                    </div>
+                </div>
+            `;
         }
     }
 }
 
-new AppManager();
+window.appManager = new AppManager();
